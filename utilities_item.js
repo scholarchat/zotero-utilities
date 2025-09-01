@@ -737,8 +737,8 @@ var Utilities_Item = {
 			return '';
 		}
 
-		if (!globalThis.Intl || !globalThis.Intl.DisplayNames || !globalThis.Intl.Locale) {
-			Zotero.debug('Intl not available: returning language as-is');
+		if (!globalThis.Intl || !globalThis.Intl.DisplayNames) {
+			Zotero.debug('Intl.DisplayNames not available: returning language as-is');
 			return language;
 		}
 
@@ -770,29 +770,7 @@ var Utilities_Item = {
 			}
 		}
 
-		let normalized = normalize(language);
-		// If it's a localized language name, return the language's code
-		if (languageMap.has(normalized)) {
-			return languageMap.get(normalized);
-		}
-		
-		// Is the input a valid locale code?
-		try {
-			new Intl.Locale(language);
-		}
-		catch (e) {
-			try {
-				new Intl.Locale(language.replace(/_/g, '-'));
-				// No, but language with _ substituted for - (e.g. en_US -> en-US) is
-				// Return that
-				return language.replace(/_/g, '-');
-			}
-			catch (e) {
-			}
-			// All other cases: return the original input
-		}
-		
-		return language;
+		return languageMap.get(normalize(language)) || language;
 	},
 
 	/**
@@ -820,8 +798,8 @@ var Utilities_Item = {
 
 		var fieldID, itemFieldID;
 		for(var field in item) {
-			if(field === "complete" || field === "itemID" || field === "attachments"
-				|| field === "seeAlso") continue;
+			if(field === "complete" || field === "itemID" || field === "seeAlso")
+				continue;
 
 			var val = item[field];
 
@@ -903,6 +881,25 @@ var Utilities_Item = {
 						parentItem: newItem.key,
 						note: note.toString()
 					});
+				}
+			} else if(field === "attachments") {
+				var n = val.length;
+				for(var j=0; j<n; j++) {
+					var attachment = val[j];
+					if(typeof attachment !== "object" || !attachment.url) {
+						Zotero.debug("itemToAPIJSON: Discarded attachment: not an URL");
+						continue;
+					}
+					var apiItem = {
+						itemType:   "attachment",
+						parentItem: newItem.key,
+						mimeType:   attachment.mimeType.toString(),
+						url:        attachment.url.toString(),
+					};
+					if (attachment.title) { // Optional field member, not all attachments have a title
+						apiItem['title'] = attachment.title.toString();
+					}
+					newItems.push(apiItem);
 				}
 			} else if((fieldID = Zotero.ItemFields.getID(field))) {
 				// if content is not a string, either stringify it or delete it
